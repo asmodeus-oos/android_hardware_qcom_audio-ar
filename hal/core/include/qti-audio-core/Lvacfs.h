@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <aidl/android/media/audio/common/AudioFormatDescription.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -34,7 +36,9 @@ class Lvacfs {
 
     const struct lvacfs_wrapper_ops* getWrapperOps() const { return wrapper_ops_.get(); }
 
-    void** startInputStream(int32_t source, uint32_t sampleRate, uint32_t channelCount);
+    void** startInputStream(int32_t source, uint32_t sampleRate,
+                            const ::aidl::android::media::audio::common::AudioFormatDescription& format,
+                            uint32_t channelCount);
     bool processInputStream(void** handle, void* buffer, uint32_t numFrames);
     void stopInputStream(void** handle);
 

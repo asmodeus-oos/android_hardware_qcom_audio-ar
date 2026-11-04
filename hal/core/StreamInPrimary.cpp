@@ -911,7 +911,7 @@ void StreamInPrimary::startLvacfs() {
     const auto source = getAudioSource(mMixPortConfig);
     mLvacfsHandle = mLvacfs.startInputStream(
             static_cast<int32_t>(source.value_or(AudioSource::DEFAULT)),
-            mMixPortConfig.sampleRate.value().value,
+            mMixPortConfig.sampleRate.value().value, mMixPortConfig.format.value(),
             getChannelCount(mMixPortConfig.channelMask.value()));
 }
 

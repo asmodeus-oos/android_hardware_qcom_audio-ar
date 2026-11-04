@@ -37,6 +37,10 @@
         }                                                                               \
     } while (0)
 
+using ::aidl::android::media::audio::common::AudioFormatDescription;
+using ::aidl::android::media::audio::common::AudioFormatType;
+using ::aidl::android::media::audio::common::PcmType;
+
 namespace qti::audio::core {
 
 Lvacfs::Lvacfs() : wrapper_ops_(nullptr), params_file_path_(nullptr) {
@@ -107,7 +111,27 @@ void Lvacfs::deinit() {
     LOG(INFO) << "LVACFS deinitialized";
 }
 
-void** Lvacfs::startInputStream(int32_t source, uint32_t sampleRate, uint32_t channelCount) {
+// Values match tinyalsa's pcm_format enum in tinyalsa/asoundlib.h.
+static int lvacfs_format_from_audio_format(const AudioFormatDescription& format) {
+    if (format.type != AudioFormatType::PCM) {
+        return -1;  // PCM_FORMAT_INVALID
+    }
+    switch (format.pcm) {
+        case PcmType::INT_16_BIT: return 0;    // PCM_FORMAT_S16_LE
+        case PcmType::INT_32_BIT: return 1;    // PCM_FORMAT_S32_LE
+        case PcmType::FIXED_Q_8_24: return 3;  // PCM_FORMAT_S24_LE
+        case PcmType::INT_24_BIT: return 4;    // PCM_FORMAT_S24_3LE
+        default: return -1;                    // PCM_FORMAT_INVALID
+    }
+}
+
+void** Lvacfs::startInputStream(int32_t source, uint32_t sampleRate,
+                                const AudioFormatDescription& format, uint32_t channelCount) {
+    int lvacfs_format = lvacfs_format_from_audio_format(format);
+    if (lvacfs_format < 0) {
+        LOG(ERROR) << "Unsupported audio format: " << format.toString();
+        return nullptr;
+    }
     void** handle = static_cast<void**>(calloc(1, sizeof(void*)));
     if (!handle) {
         LOG(ERROR) << "Failed to allocate lvacfs handle";
@@ -115,8 +139,7 @@ void** Lvacfs::startInputStream(int32_t source, uint32_t sampleRate, uint32_t ch
     }
     wrapper_ops_->set_params_file_path(params_file_path_);
     uint32_t channels = ((channelCount & 0xFFFF) << 16) | (channelCount & 0xFFFF);
-    // Set format to false (0) since lvacfs does not support pal audio format
-    uint64_t sample_rate_and_format = ((uint64_t)0 << 32) | sampleRate;
+    uint64_t sample_rate_and_format = ((uint64_t)lvacfs_format << 32) | sampleRate;
     int ret = wrapper_ops_->create_instance(handle, source, sample_rate_and_format, channels);
     if (ret < 0) {
         LOG(ERROR) << "create instance failed: " << ret;
