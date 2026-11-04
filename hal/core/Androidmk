@@ -33,7 +33,8 @@ LOCAL_SRC_FILES := \
     Telephony.cpp \
     StreamInPrimary.cpp \
     StreamOutPrimary.cpp \
-    HalOffloadEffects.cpp
+    HalOffloadEffects.cpp \
+    Lvacfs.cpp
 
 LOCAL_HEADER_LIBRARIES :=  \
     libxsdc-utils \

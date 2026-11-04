@@ -407,6 +407,7 @@ void StreamInPrimary::resume() {
     }
     else {
         *actualFrameCount = static_cast<size_t>(bytesRead) / mFrameSizeBytes;
+        processLvacfs(palBuffer.buffer, static_cast<size_t>(bytesRead));
     }
 
 #ifdef VERY_VERBOSE_LOGGING
@@ -828,6 +829,8 @@ void StreamInPrimary::configure() {
     if (!mEffectsApplied)
         applyEffects();
 
+    startLvacfs();
+
     LOG(DEBUG) << __func__ << mLogPrefix << " : stream is configured";
 
     const auto endTime = std::chrono::steady_clock::now();
@@ -896,6 +899,40 @@ void StreamInPrimary::shutdown_I() {
         std::get<CompressCapture>(mExt).setPalHandle(nullptr);
     }
     mPalHandle = nullptr;
+
+    stopLvacfs();
+}
+
+void StreamInPrimary::startLvacfs() {
+    std::lock_guard<std::mutex> lock(mLvacfsLock);
+    if (!mLvacfs.getWrapperOps() || mLvacfsHandle) {
+        return;
+    }
+    const auto source = getAudioSource(mMixPortConfig);
+    mLvacfsHandle = mLvacfs.startInputStream(
+            static_cast<int32_t>(source.value_or(AudioSource::DEFAULT)),
+            mMixPortConfig.sampleRate.value().value,
+            getChannelCount(mMixPortConfig.channelMask.value()));
+}
+
+void StreamInPrimary::processLvacfs(void* buffer, size_t bytes) {
+    std::lock_guard<std::mutex> lock(mLvacfsLock);
+    if (!mLvacfsHandle) {
+        return;
+    }
+    if (!mLvacfs.processInputStream(mLvacfsHandle, buffer, bytes / mFrameSizeBytes)) {
+        mLvacfs.stopInputStream(mLvacfsHandle);
+        mLvacfsHandle = nullptr;
+    }
+}
+
+void StreamInPrimary::stopLvacfs() {
+    std::lock_guard<std::mutex> lock(mLvacfsLock);
+    if (!mLvacfsHandle) {
+        return;
+    }
+    mLvacfs.stopInputStream(mLvacfsHandle);
+    mLvacfsHandle = nullptr;
 }
 
 ::android::status_t StreamInPrimary::burstZero() {
